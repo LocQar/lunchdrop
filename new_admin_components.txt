@@ -1,0 +1,329 @@
+// This file contains the new admin components to be added to App.jsx
+// Insert after line 4167 (after AdminMaps component)
+
+// ═══════════════════════════════════════════════════════════════════
+// ANALYTICS DASHBOARD
+// ═══════════════════════════════════════════════════════════════════
+function AdminAnalytics(){
+  const {adminOrders}=useContext(AppCtx);
+  const [dateRange,setDateRange]=useState("30");
+  const [selectedMetric,setSelectedMetric]=useState("revenue");
+
+  const today=new Date();
+  const daysAgo=parseInt(dateRange);
+  const startDate=new Date(today);
+  startDate.setDate(startDate.getDate()-daysAgo);
+
+  // Filter orders by date range
+  const filteredOrders=adminOrders.filter(o=>{
+    const orderDate=new Date(o.date);
+    return orderDate>=startDate&&orderDate<=today;
+  });
+
+  // Analytics calculations
+  const totalRevenue=filteredOrders.reduce((sum,o)=>sum+o.total,0);
+  const totalOrders=filteredOrders.length;
+  const avgOrderValue=totalOrders>0?totalRevenue/totalOrders:0;
+  const deliveredOrders=filteredOrders.filter(o=>o.status==="delivered").length;
+  const completionRate=totalOrders>0?(deliveredOrders/totalOrders*100):0;
+
+  // Revenue by day
+  const revenueByDay={};
+  filteredOrders.forEach(o=>{
+    if(!revenueByDay[o.date])revenueByDay[o.date]=0;
+    revenueByDay[o.date]+=o.total;
+  });
+
+  // Top restaurants
+  const restaurantStats={};
+  filteredOrders.forEach(o=>{
+    if(!restaurantStats[o.restaurantName]){
+      restaurantStats[o.restaurantName]={orders:0,revenue:0};
+    }
+    restaurantStats[o.restaurantName].orders++;
+    restaurantStats[o.restaurantName].revenue+=o.total;
+  });
+  const topRestaurants=Object.entries(restaurantStats)
+    .map(([name,stats])=>({name,...stats}))
+    .sort((a,b)=>b.revenue-a.revenue)
+    .slice(0,5);
+
+  // Top buildings
+  const buildingStats={};
+  filteredOrders.forEach(o=>{
+    if(!buildingStats[o.building])buildingStats[o.building]={orders:0,revenue:0};
+    buildingStats[o.building].orders++;
+    buildingStats[o.building].revenue+=o.total;
+  });
+  const topBuildings=Object.entries(buildingStats)
+    .map(([name,stats])=>({name,...stats}))
+    .sort((a,b)=>b.orders-a.orders)
+    .slice(0,5);
+
+  // Simple bar chart data
+  const chartData=Object.entries(revenueByDay).slice(-7);
+  const maxRevenue=Math.max(...chartData.map(([_,v])=>v));
+
+  // Export to CSV
+  const exportToCSV=()=>{
+    const csv=[
+      ["Date","Orders","Revenue","Avg Order Value"],
+      ...Object.entries(revenueByDay).map(([date,revenue])=>{
+        const dayOrders=filteredOrders.filter(o=>o.date===date).length;
+        return [date,dayOrders,revenue.toFixed(2),(revenue/dayOrders).toFixed(2)];
+      })
+    ].map(row=>row.join(",")).join("\n");
+
+    const blob=new Blob([csv],{type:"text/csv"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`analytics-${dateRange}days-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return(
+    <AdminLayout activeTab="analytics">
+      <div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:32}}>
+          <div>
+            <h1 style={{fontFamily:"var(--serif)",fontSize:36,color:"var(--bark)",marginBottom:8}}>Analytics & Reports</h1>
+            <p style={{fontSize:16,color:"var(--clay2)"}}>Platform performance and trends</p>
+          </div>
+          <div style={{display:"flex",gap:12}}>
+            <select value={dateRange} onChange={e=>setDateRange(e.target.value)} style={{padding:"10px 16px",borderRadius:12,border:"1px solid var(--sand)",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"var(--sans)"}}>
+              <option value="7">Last 7 Days</option>
+              <option value="14">Last 14 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+            </select>
+            <button onClick={exportToCSV} style={{padding:"10px 20px",background:"var(--olive)",color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"var(--sans)"}}>📥 Export CSV</button>
+          </div>
+        </div>
+
+        {/* Key Metrics */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:20,marginBottom:32}}>
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"2px solid var(--olive)"}}>
+            <div style={{fontSize:13,color:"var(--clay2)",marginBottom:8}}>Total Revenue</div>
+            <div style={{fontSize:36,fontWeight:700,color:"var(--olive)",fontFamily:"var(--serif)",marginBottom:4}}>${totalRevenue.toFixed(2)}</div>
+            <div style={{fontSize:11,color:"var(--olive2)"}}>↗ {daysAgo} days</div>
+          </div>
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"2px solid var(--terra)"}}>
+            <div style={{fontSize:13,color:"var(--clay2)",marginBottom:8}}>Total Orders</div>
+            <div style={{fontSize:36,fontWeight:700,color:"var(--terra)",fontFamily:"var(--serif)",marginBottom:4}}>{totalOrders}</div>
+            <div style={{fontSize:11,color:"var(--terra2)"}}>Avg {(totalOrders/daysAgo).toFixed(1)}/day</div>
+          </div>
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"2px solid var(--honey)"}}>
+            <div style={{fontSize:13,color:"var(--clay2)",marginBottom:8}}>Avg Order Value</div>
+            <div style={{fontSize:36,fontWeight:700,color:"var(--honey)",fontFamily:"var(--serif)",marginBottom:4}}>${avgOrderValue.toFixed(2)}</div>
+            <div style={{fontSize:11,color:"var(--honey2)"}}>Per order</div>
+          </div>
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"2px solid var(--blue)"}}>
+            <div style={{fontSize:13,color:"var(--clay2)",marginBottom:8}}>Completion Rate</div>
+            <div style={{fontSize:36,fontWeight:700,color:"var(--blue)",fontFamily:"var(--serif)",marginBottom:4}}>{completionRate.toFixed(1)}%</div>
+            <div style={{fontSize:11,color:"var(--blue2)"}}>{deliveredOrders} delivered</div>
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:24}}>
+          {/* Revenue Chart */}
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"1px solid var(--sand)"}}>
+            <h3 style={{fontFamily:"var(--serif)",fontSize:20,color:"var(--bark)",marginBottom:24}}>Revenue Trend (Last 7 Days)</h3>
+            <div style={{display:"flex",alignItems:"end",gap:12,height:200}}>
+              {chartData.map(([date,revenue])=>(
+                <div key={date} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}>
+                  <div style={{width:"100%",background:"var(--olive)",borderRadius:"8px 8px 0 0",height:`${(revenue/maxRevenue)*100}%`,minHeight:4,position:"relative"}}>
+                    <div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",fontSize:11,fontWeight:600,color:"var(--olive)",marginBottom:4}}>${revenue.toFixed(0)}</div>
+                  </div>
+                  <div style={{fontSize:10,color:"var(--clay2)",marginTop:8,transform:"rotate(-45deg)",transformOrigin:"top left",whiteSpace:"nowrap"}}>{date.split("-").slice(1).join("/")}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top Restaurants */}
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"1px solid var(--sand)"}}>
+            <h3 style={{fontFamily:"var(--serif)",fontSize:20,color:"var(--bark)",marginBottom:16}}>Top Restaurants</h3>
+            {topRestaurants.map((rest,i)=>(
+              <div key={rest.name} style={{marginBottom:16,padding:12,background:"var(--bg2)",borderRadius:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"var(--olive)":i===1?"var(--honey)":"var(--terra)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700}}>{i+1}</div>
+                  <div style={{fontSize:14,fontWeight:600,color:"var(--bark)",flex:1}}>{rest.name}</div>
+                </div>
+                <div style={{fontSize:12,color:"var(--clay2)",marginLeft:32}}>{rest.orders} orders • ${rest.revenue.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top Buildings */}
+        <div className="glass-card" style={{padding:24,borderRadius:16,border:"1px solid var(--sand)",marginTop:24}}>
+          <h3 style={{fontFamily:"var(--serif)",fontSize:20,color:"var(--bark)",marginBottom:16}}>Top Delivery Locations</h3>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:16}}>
+            {topBuildings.map(building=>(
+              <div key={building.name} style={{padding:16,background:"var(--bg2)",borderRadius:12,textAlign:"center"}}>
+                <div style={{fontSize:24,marginBottom:8}}>🏢</div>
+                <div style={{fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:4}}>{building.name}</div>
+                <div style={{fontSize:12,color:"var(--olive2)",fontWeight:600}}>{building.orders} orders</div>
+                <div style={{fontSize:11,color:"var(--clay2)"}}>${building.revenue.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </AdminLayout>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS PANEL
+// ═══════════════════════════════════════════════════════════════════
+function AdminSettings(){
+  const {platformSettings,updatePlatformSettings}=useContext(AppCtx);
+  const [activeTab,setActiveTab]=useState("delivery");
+
+  const addDeliveryWindow=()=>{
+    const newWindow={
+      id:`w${platformSettings.deliveryWindows.length+1}`,
+      time:"",
+      enabled:true,
+      capacity:100
+    };
+    updatePlatformSettings("deliveryWindows",[...platformSettings.deliveryWindows,newWindow]);
+  };
+
+  const updateWindow=(id,updates)=>{
+    updatePlatformSettings("deliveryWindows",
+      platformSettings.deliveryWindows.map(w=>w.id===id?{...w,...updates}:w)
+    );
+  };
+
+  const deleteWindow=(id)=>{
+    updatePlatformSettings("deliveryWindows",
+      platformSettings.deliveryWindows.filter(w=>w.id!==id)
+    );
+  };
+
+  return(
+    <AdminLayout activeTab="settings">
+      <div>
+        <h1 style={{fontFamily:"var(--serif)",fontSize:36,color:"var(--bark)",marginBottom:8}}>Platform Settings</h1>
+        <p style={{fontSize:16,color:"var(--clay2)",marginBottom:32}}>Configure delivery windows, fees, and zones</p>
+
+        {/* Tabs */}
+        <div style={{display:"flex",gap:12,marginBottom:24,borderBottom:"2px solid var(--sand)"}}>
+          {[
+            {key:"delivery",label:"Delivery Windows"},
+            {key:"fees",label:"Fees & Tax"},
+            {key:"zones",label:"Delivery Zones"},
+            {key:"business",label:"Business Info"}
+          ].map(tab=>(
+            <button key={tab.key} onClick={()=>setActiveTab(tab.key)} style={{padding:"12px 24px",background:"none",border:"none",borderBottom:activeTab===tab.key?"3px solid var(--terra)":"none",fontSize:15,fontWeight:600,color:activeTab===tab.key?"var(--terra)":"var(--clay2)",cursor:"pointer",fontFamily:"var(--sans)",marginBottom:-2}}>{tab.label}</button>
+          ))}
+        </div>
+
+        {/* Delivery Windows */}
+        {activeTab==="delivery"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <h3 style={{fontSize:20,fontWeight:600,color:"var(--bark)"}}>Delivery Windows</h3>
+              <button onClick={addDeliveryWindow} style={{padding:"10px 20px",background:"var(--olive)",color:"#fff",border:"none",borderRadius:12,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"var(--sans)"}}>+ Add Window</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              {platformSettings.deliveryWindows.map(window=>(
+                <div key={window.id} className="glass-card" style={{padding:20,borderRadius:12,border:"1px solid var(--sand)"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:16,alignItems:"center"}}>
+                    <div>
+                      <label style={{display:"block",fontSize:13,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Time</label>
+                      <input type="time" value={window.time.replace(" AM","").replace(" PM","")} onChange={e=>updateWindow(window.id,{time:e.target.value})} style={{width:"100%",padding:"10px",borderRadius:8,border:"1px solid var(--sand)",fontSize:14,fontFamily:"var(--sans)"}}/>
+                    </div>
+                    <div>
+                      <label style={{display:"block",fontSize:13,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Capacity</label>
+                      <input type="number" value={window.capacity} onChange={e=>updateWindow(window.id,{capacity:parseInt(e.target.value)})} style={{width:"100%",padding:"10px",borderRadius:8,border:"1px solid var(--sand)",fontSize:14,fontFamily:"var(--sans)"}}/>
+                    </div>
+                    <div>
+                      <label style={{display:"block",fontSize:13,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Status</label>
+                      <button onClick={()=>updateWindow(window.id,{enabled:!window.enabled})} style={{padding:"10px 20px",background:window.enabled?"var(--olive-bg)":"var(--bg2)",color:window.enabled?"var(--olive)":"var(--clay2)",border:"1px solid var(--sand)",borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"var(--sans)"}}>{window.enabled?"Enabled":"Disabled"}</button>
+                    </div>
+                    <button onClick={()=>deleteWindow(window.id)} style={{padding:"10px 16px",background:"var(--red)",color:"#fff",border:"none",borderRadius:8,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"var(--sans)"}}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fees & Tax */}
+        {activeTab==="fees"&&(
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"1px solid var(--sand)"}}>
+            <h3 style={{fontSize:20,fontWeight:600,color:"var(--bark)",marginBottom:24}}>Fees & Tax Configuration</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:24}}>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Delivery Fee ($)</label>
+                <input type="number" step="0.01" value={platformSettings.fees.deliveryFee} onChange={e=>updatePlatformSettings("fees",{...platformSettings.fees,deliveryFee:parseFloat(e.target.value)})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Tax Rate (%)</label>
+                <input type="number" step="0.001" value={(platformSettings.fees.taxRate*100).toFixed(1)} onChange={e=>updatePlatformSettings("fees",{...platformSettings.fees,taxRate:parseFloat(e.target.value)/100})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Service Fee ($)</label>
+                <input type="number" step="0.01" value={platformSettings.fees.serviceFee} onChange={e=>updatePlatformSettings("fees",{...platformSettings.fees,serviceFee:parseFloat(e.target.value)})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Zones */}
+        {activeTab==="zones"&&(
+          <div>
+            <h3 style={{fontSize:20,fontWeight:600,color:"var(--bark)",marginBottom:16}}>Delivery Zones</h3>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:20}}>
+              {platformSettings.zones.map(zone=>(
+                <div key={zone.id} className="glass-card" style={{padding:20,borderRadius:12,border:`2px solid ${zone.color}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <h4 style={{fontSize:18,fontWeight:600,color:"var(--bark)"}}>{zone.name}</h4>
+                    <button onClick={()=>updatePlatformSettings("zones",platformSettings.zones.map(z=>z.id===zone.id?{...z,enabled:!z.enabled}:z))} style={{padding:"6px 12px",background:zone.enabled?"var(--olive-bg)":"var(--bg2)",color:zone.enabled?"var(--olive)":"var(--clay2)",border:"none",borderRadius:6,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"var(--sans)"}}>{zone.enabled?"Active":"Inactive"}</button>
+                  </div>
+                  <div style={{fontSize:13,color:"var(--clay2)"}}>Zone ID: {zone.id}</div>
+                  <div style={{marginTop:12}}>
+                    <label style={{display:"block",fontSize:12,fontWeight:600,color:"var(--bark)",marginBottom:4}}>Zone Color</label>
+                    <input type="color" value={zone.color} onChange={e=>updatePlatformSettings("zones",platformSettings.zones.map(z=>z.id===zone.id?{...z,color:e.target.value}:z))} style={{width:60,height:40,borderRadius:8,border:"1px solid var(--sand)",cursor:"pointer"}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Business Info */}
+        {activeTab==="business"&&(
+          <div className="glass-card" style={{padding:24,borderRadius:16,border:"1px solid var(--sand)"}}>
+            <h3 style={{fontSize:20,fontWeight:600,color:"var(--bark)",marginBottom:24}}>Business Information</h3>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Order Cutoff Time</label>
+                <input type="text" value={platformSettings.business.cutoffTime} onChange={e=>updatePlatformSettings("business",{...platformSettings.business,cutoffTime:e.target.value})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Min Order Value ($)</label>
+                <input type="number" step="0.01" value={platformSettings.business.minOrderValue} onChange={e=>updatePlatformSettings("business",{...platformSettings.business,minOrderValue:parseFloat(e.target.value)})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Support Email</label>
+                <input type="email" value={platformSettings.business.supportEmail} onChange={e=>updatePlatformSettings("business",{...platformSettings.business,supportEmail:e.target.value})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:14,fontWeight:600,color:"var(--bark)",marginBottom:8}}>Support Phone</label>
+                <input type="tel" value={platformSettings.business.supportPhone} onChange={e=>updatePlatformSettings("business",{...platformSettings.business,supportPhone:e.target.value})} style={{width:"100%",padding:"12px",borderRadius:8,border:"1px solid var(--sand)",fontSize:15,fontFamily:"var(--sans)"}}/>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AdminLayout>
+  );
+}
+
+// Continue in next part due to length...
