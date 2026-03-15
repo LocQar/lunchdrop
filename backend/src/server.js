@@ -11,6 +11,8 @@ connectDB();
 
 // Route files
 import authRoutes from './routes/auth.js';
+import restaurantRoutes from './routes/restaurant.js';
+import lockerRoutes from './routes/locker.js';
 
 const app = express();
 
@@ -19,13 +21,31 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Enable CORS
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3003',
+  'https://locqar.github.io',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3003',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 
 // Mount routers
 app.use('/api/auth', authRoutes);
+app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/lockers', lockerRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {
